@@ -1,6 +1,7 @@
 pragma solidity ^0.5.8;
 
 import "fixidity/contracts/FixidityLib.sol";
+import "fixidity/contracts/ExponentLib.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 
@@ -167,20 +168,29 @@ contract StableToken is IStableToken, IERC20Token, ICeloToken, Ownable, Initiali
   )
     external
     onlyOwner
-    updateInflationFactor
   {
     require(
       rate != 0,
       "Must provide a non-zero inflation rate."
     );
+
+    int256 partialInflationPeriods = FixidityLib.newFixed(int256(
+      now.sub(inflationState.factorLastUpdated)
+    )).divide(FixidityLib.newFixed(int256(
+      inflationState.updatePeriod
+    )));
+
+    int256 rateFactor = ExponentLib.powerAny(inflationState.rate, partialInflationPeriods);
+    
+    inflationState.factor = inflationState.factor.multiply(rateFactor);
+    inflationState.factorLastUpdated = now;
     inflationState.rate = rate;
     inflationState.updatePeriod = updatePeriod;
 
     emit InflationParametersUpdated(
       inflationState.rate,
       inflationState.updatePeriod,
-      // solhint-disable-next-line not-rely-on-time
-      now
+      inflationState.factorLastUpdated
     );
   }
 
@@ -418,8 +428,6 @@ contract StableToken is IStableToken, IERC20Token, ICeloToken, Ownable, Initiali
     uint256 numerator;
     uint256 denominator;
 
-    // TODO: handle retroactive updates given decreases to updatePeriod:
-    // https://github.com/celo-org/celo-monorepo/issues/3929
     uint256 timesToApplyInflation = now.sub(inflationState.factorLastUpdated).div(
       inflationState.updatePeriod
     );

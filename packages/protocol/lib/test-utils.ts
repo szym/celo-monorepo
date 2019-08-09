@@ -1,4 +1,3 @@
-import { hasEntryInRegistry, usesRegistry } from '@celo/protocol/lib/registry-utils'
 import BigNumber from 'bignumber.js'
 import * as chai from 'chai'
 import * as chaiSubset from 'chai-subset'
@@ -12,6 +11,9 @@ import {
   StableTokenInstance,
   UsingRegistryInstance,
 } from 'types'
+
+import { hasEntryInRegistry, usesRegistry } from '@celo/protocol/lib/registry-utils'
+
 // tslint:disable-next-line: ordered-imports
 import BN = require('bn.js')
 import Web3 = require('web3')
