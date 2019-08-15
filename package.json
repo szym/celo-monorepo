@@ -41,7 +41,9 @@
       "@celo/web/@timkendrick/monaco-editor",
       "@celo/web/@types/react-i18next",
       "@celo/web/next-i18next",
-      "**/openzeppelin-solidity"
+      "**/openzeppelin-solidity",
+      "**/fixidity",
+      "**/solidity-bytes-utils"
     ]
   },
   "devDependencies": {

@@ -1,0 +1,13 @@
+diff --git a/node_modules/fixidity/contracts/ExponentLib.sol b/node_modules/fixidity/contracts/ExponentLib.sol
+index 4930689..8705c3a 100644
+--- a/node_modules/fixidity/contracts/ExponentLib.sol
++++ b/node_modules/fixidity/contracts/ExponentLib.sol
+@@ -36,7 +36,7 @@ library ExponentLib {
+             d = (d * x) / (FixidityLib.fixed1() * i);
+             tr += d;
+         }
+-        return trunc_digits(FixidityLib.multiply(tr, r), 2);
++        return FixidityLib.multiply(tr, r);
+     }
+ 
+     function powerAny(int256 a, int256 b) 

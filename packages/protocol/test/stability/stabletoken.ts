@@ -11,6 +11,8 @@ import {
   timeTravel,
 } from '@celo/protocol/lib/test-utils'
 
+import console = require('console')
+
 const Registry: Truffle.Contract<RegistryInstance> = artifacts.require('Registry')
 const StableToken: Truffle.Contract<StableTokenInstance> = artifacts.require('StableToken')
 
@@ -200,7 +202,7 @@ contract('StableToken', (accounts: string[]) => {
     })
   })
 
-  describe.only('#setInflationParameters()', () => {
+  describe('#setInflationParameters()', () => {
     const inflationRate = toFixed(15 / 7)
     it('should update parameters', async () => {
       const newUpdatePeriod = SECONDS_IN_A_WEEK + 5
@@ -212,14 +214,16 @@ contract('StableToken', (accounts: string[]) => {
       assert.equal(lastUpdated.toNumber(), updateTime)
     })
 
-    it('should compute partial factor from previous parameters', async () => {
+    it.only('should compute partial factor from previous parameters', async () => {
       const initialRate = toFixed(3 / 2)
       const newRate = toFixed(1)
       await stableToken.setInflationParameters(initialRate, SECONDS_IN_A_WEEK)
       await timeTravel(SECONDS_IN_A_WEEK * 0.5, web3)
-      const expectedFactor = initialRate.squareRoot()
+      const expectedFactor = fromFixed(initialRate).squareRoot()
       const res = await stableToken.setInflationParameters(newRate, 2 * SECONDS_IN_A_WEEK)
       const [rate, factor, updatePeriod, lastUpdated] = await stableToken.getInflationParameters()
+      console.log('expected factor', expectedFactor.toNumber())
+      console.log('factor', fromFixed(factor).toNumber())
       assertLogMatches2(res.logs[0], {
         event: 'InflationParametersUpdated',
         args: {
