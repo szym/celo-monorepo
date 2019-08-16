@@ -157,8 +157,6 @@ contract StableToken is IStableToken, IERC20Token, ICeloToken, Ownable, Initiali
     emit MinterSet(minter);
   }
 
-  event ComputedRateFactor(int256 rateFac);
-
   /**
    * @notice Updates Inflation Parameters.
    * @param rate new rate.
@@ -182,18 +180,15 @@ contract StableToken is IStableToken, IERC20Token, ICeloToken, Ownable, Initiali
       inflationState.updatePeriod
     )));
 
-    // TODO: migrate to tested library/precompile
     int256 rateFactor = ExponentLib.powerAny(inflationState.rate, partialInflationPeriods);
-    emit ComputedRateFactor(rateFactor);
-    // emit RateFactorComputed(inflationState.rate, partialInflationPeriods, rateFactor);
-
-    // int256 oneHalf = FixidityLib.newFixed(int256(500000000000000000000000));
-    // int256 oneAndOneHalf = FixidityLib.newFixed(int256(1500000000000000000000000));
-    // int256 res = ExponentLib.powerAny(oneAndOneHalf, oneHalf);
-    // emit RateFactorComputed(oneAndOneHalf, oneHalf, res);
 
     inflationState.factor = inflationState.factor.multiply(rateFactor);
     inflationState.factorLastUpdated = now;
+    emit InflationFactorUpdated(
+      inflationState.factor,
+      inflationState.factorLastUpdated
+    );
+    
     inflationState.rate = rate;
     inflationState.updatePeriod = updatePeriod;
 

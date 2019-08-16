@@ -4,14 +4,13 @@ import { RegistryInstance, StableTokenInstance } from 'types'
 
 import { fixed1, fromFixed, toFixed } from '@celo/protocol/lib/fixidity'
 import {
+  assertFloatEquality,
   assertLogMatches,
   assertLogMatches2,
   assertRevert,
   NULL_ADDRESS,
   timeTravel,
 } from '@celo/protocol/lib/test-utils'
-
-import console = require('console')
 
 const Registry: Truffle.Contract<RegistryInstance> = artifacts.require('Registry')
 const StableToken: Truffle.Contract<StableTokenInstance> = artifacts.require('StableToken')
@@ -214,61 +213,55 @@ contract('StableToken', (accounts: string[]) => {
       assert.equal(lastUpdated.toNumber(), updateTime)
     })
 
-    it.only('should compute partial factor from previous parameters', async () => {
+    it('should compute partial factor from previous parameters', async () => {
       const initialRate = toFixed(3 / 2)
       const newRate = toFixed(1)
       await stableToken.setInflationParameters(initialRate, SECONDS_IN_A_WEEK)
       await timeTravel(SECONDS_IN_A_WEEK * 0.5, web3)
       const expectedFactor = fromFixed(initialRate).squareRoot()
-      const res = await stableToken.setInflationParameters(newRate, 2 * SECONDS_IN_A_WEEK)
+      await stableToken.setInflationParameters(newRate, 2 * SECONDS_IN_A_WEEK)
       const [rate, factor, updatePeriod, lastUpdated] = await stableToken.getInflationParameters()
-      console.log('expected factor', expectedFactor.toNumber())
-      console.log('factor', fromFixed(factor).toNumber())
-      assertLogMatches2(res.logs[0], {
-        event: 'InflationParametersUpdated',
-        args: {
-          rate,
-          updatePeriod,
-          lastUpdated,
-        },
-      })
+      assertFloatEquality(fromFixed(factor), expectedFactor, 'Partial factor incorrect')
       assert.isTrue(updatePeriod.eq(2 * SECONDS_IN_A_WEEK))
       assert.isTrue(rate.eq(newRate))
-      assert.isTrue(fromFixed(factor).eq(expectedFactor))
       assert.exists(lastUpdated)
+    })
+
+    it('should emit an InflationFactorUpdated event', async () => {
+      const newUpdatePeriod = SECONDS_IN_A_WEEK + 5
+      const res = await stableToken.setInflationParameters(inflationRate, newUpdatePeriod)
+      assertLogMatches2(res.logs[0], {
+        event: 'InflationFactorUpdated',
+        args: {
+          factor: res.logs[0].args.factor,
+          lastUpdated: res.logs[0].args.lastUpdated,
+        },
+      })
     })
 
     it('should emit an InflationParametersUpdated event', async () => {
       const newUpdatePeriod = SECONDS_IN_A_WEEK + 5
       const res = await stableToken.setInflationParameters(inflationRate, newUpdatePeriod)
-      assertLogMatches2(res.logs[0], {
+      assertLogMatches2(res.logs[1], {
         event: 'InflationParametersUpdated',
         args: {
           rate: inflationRate,
           updatePeriod: newUpdatePeriod,
-          lastUpdated: res.logs[0].args.lastUpdated,
+          lastUpdated: res.logs[1].args.lastUpdated,
         },
       })
     })
 
     it('updates inflationFactor when out of date', async () => {
       const initialRate = toFixed(3 / 2)
-      const expectedFactor = toFixed(3 / 2)
       const newRate = toFixed(1)
       await stableToken.setInflationParameters(initialRate, SECONDS_IN_A_WEEK)
       await timeTravel(SECONDS_IN_A_WEEK, web3)
-      const res = await stableToken.setInflationParameters(newRate, SECONDS_IN_A_WEEK)
-      const [rate, factor, updatePeriod, lastUpdated] = await stableToken.getInflationParameters()
-      assertLogMatches2(res.logs[0], {
-        event: 'InflationParametersUpdated',
-        args: {
-          rate,
-          updatePeriod,
-          lastUpdated,
-        },
-      })
+      await stableToken.setInflationParameters(newRate, SECONDS_IN_A_WEEK)
+      const expectedFactor = fromFixed(initialRate)
+      const [rate, factor, , lastUpdated] = await stableToken.getInflationParameters()
+      assertFloatEquality(fromFixed(factor), expectedFactor, 'Updated factor incorrect')
       assert.isTrue(rate.eq(newRate))
-      assert.isTrue(fromFixed(factor).eq(expectedFactor))
       assert.exists(lastUpdated)
     })
 
@@ -419,11 +412,6 @@ contract('StableToken', (accounts: string[]) => {
           lastUpdated: requestBlockTime,
         })
       }
-
-      it('setInflationParameters', async () => {
-        const res = await stableToken.setInflationParameters(fixed1, SECONDS_IN_A_WEEK)
-        await assertInflationUpdatedEvent(res.logs[0], initializationTime + SECONDS_IN_A_WEEK)
-      })
 
       it('approve', async () => {
         const res = await stableToken.approve(receiver, amount)
