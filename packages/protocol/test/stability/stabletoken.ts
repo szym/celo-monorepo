@@ -403,6 +403,8 @@ contract('StableToken', (accounts: string[]) => {
         await stableToken.setMinter(sender)
         await stableToken.mint(sender, amount.times(2))
         await stableToken.setInflationParameters(inflationRate, SECONDS_IN_A_WEEK)
+        // slight hack to make tests more reliable
+        initializationTime = (await web3.eth.getBlock('latest')).timestamp
         await timeTravel(SECONDS_IN_A_WEEK, web3)
       })
 
