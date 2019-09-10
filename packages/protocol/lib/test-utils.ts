@@ -11,8 +11,7 @@ import {
   StableTokenInstance,
   UsingRegistryInstance,
 } from 'types'
-
-import { hasEntryInRegistry, usesRegistry } from '@celo/protocol/lib/registry-utils'
+const soliditySha3 = new (require('web3'))().utils.soliditySha3
 
 // tslint:disable-next-line: ordered-imports
 import BN = require('bn.js')
@@ -60,13 +59,13 @@ export async function advanceBlockNum(numBlocks: number, web3: Web3) {
   return returnValue
 }
 
-export async function timeTravel(seconds: number, web3: Web3) {
+export async function jsonRpc(web3: Web3, method: string, params: any[] = []): Promise<any> {
   return new Promise((resolve, reject) => {
     web3.currentProvider.send(
       {
         jsonrpc: '2.0',
-        method: 'evm_increaseTime',
-        params: [seconds],
+        method,
+        params,
         id: new Date().getTime(),
       },
       // @ts-ignore
@@ -78,6 +77,11 @@ export async function timeTravel(seconds: number, web3: Web3) {
       }
     )
   })
+}
+
+export async function timeTravel(seconds: number, web3: Web3) {
+  await jsonRpc(web3, 'evm_increaseTime', [seconds])
+  await jsonRpc(web3, 'evm_mine', [])
 }
 
 export async function assertBalance(address: string, balance: BigNumber) {
@@ -142,7 +146,7 @@ export const assertContractsRegistered = async (getContract: any) => {
     const contract: Truffle.ContractInstance = await getContract(contractName, 'proxiedContract')
     assert.equal(
       contract.address.toLowerCase(),
-      (await registry.getAddressFor(contractName)).toLowerCase(),
+      (await registry.getAddressFor(soliditySha3(contractName))).toLowerCase(),
       'Registry does not have the correct information for ' + contractName
     )
   }
@@ -237,6 +241,18 @@ export function assertEqualBN(
   assert(
     web3.utils.toBN(value).eq(web3.utils.toBN(expected)),
     `expected ${expected.toString()} and got ${value.toString()}. ${msg || ''}`
+  )
+}
+
+export function assertGteBN(
+  value: number | BN | BigNumber,
+  expected: number | BN | BigNumber,
+  msg?: string
+) {
+  assert(
+    web3.utils.toBN(value).gte(web3.utils.toBN(expected)),
+    `expected ${value.toString()} to be greater than or equal to ${expected.toString()}. ${msg ||
+      ''}`
   )
 }
 

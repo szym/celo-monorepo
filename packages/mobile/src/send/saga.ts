@@ -1,12 +1,12 @@
-import { getGoldTokenContract, getStableTokenContract } from '@celo/contractkit'
 import { CURRENCY_ENUM } from '@celo/utils/src/currencies'
+import { getGoldTokenContract, getStableTokenContract } from '@celo/walletkit'
 import BigNumber from 'bignumber.js'
 import { call, put, select, spawn, take, takeLeading } from 'redux-saga/effects'
 import { showError } from 'src/alert/actions'
 import CeloAnalytics from 'src/analytics/CeloAnalytics'
 import { CustomEventNames } from 'src/analytics/constants'
 import { ErrorMessages } from 'src/app/ErrorMessages'
-import { ERROR_BANNER_DURATION } from 'src/config'
+import { calculateFee } from 'src/fees/saga'
 import { features } from 'src/flags'
 import { transferGoldToken } from 'src/goldToken/actions'
 import { encryptComment } from 'src/identity/commentKey'
@@ -16,42 +16,49 @@ import { sendInvite } from 'src/invite/saga'
 import { navigate } from 'src/navigator/NavigationService'
 import { Screens } from 'src/navigator/Screens'
 import { handleBarcode, shareSVGImage } from 'src/qrcode/utils'
+import { recipientCacheSelector } from 'src/recipients/reducer'
 import {
   Actions,
   SendPaymentOrInviteAction,
   sendPaymentOrInviteFailure,
   sendPaymentOrInviteSuccess,
 } from 'src/send/actions'
-import { recipientCacheSelector } from 'src/send/reducers'
 import { transferStableToken } from 'src/stableToken/actions'
 import { BasicTokenTransfer, createTransaction } from 'src/tokens/saga'
 import { generateStandbyTransactionId } from 'src/transactions/actions'
 import Logger from 'src/utils/Logger'
 import { web3 } from 'src/web3/contracts'
-import { fetchGasPrice } from 'src/web3/gas'
 import { currentAccountSelector } from 'src/web3/selectors'
 
 const TAG = 'send/saga'
+
+export async function getSendTxGas(
+  account: string,
+  contractGetter: typeof getStableTokenContract | typeof getGoldTokenContract,
+  params: BasicTokenTransfer
+) {
+  Logger.debug(`${TAG}/getSendTxGas`, 'Getting gas estimate for send tx')
+  const tx = await createTransaction(contractGetter, params)
+  const tokenContract = await contractGetter(web3)
+  const txParams = { from: account, gasCurrency: tokenContract._address }
+  const gas = new BigNumber(await tx.estimateGas(txParams))
+  Logger.debug(`${TAG}/getSendTxGas`, `Estimated gas of ${gas.toString()}}`)
+  return gas
+}
 
 export async function getSendFee(
   account: string,
   contractGetter: typeof getStableTokenContract | typeof getGoldTokenContract,
   params: BasicTokenTransfer
 ) {
-  // create mock transaction and get gas
-  const tx = await createTransaction(contractGetter, params)
-  const txParams = { from: account, gasCurrency: (await contractGetter(web3))._address }
-  const gas = new BigNumber(await tx.estimateGas(txParams))
-  const gasPrice = new BigNumber(await fetchGasPrice())
-  Logger.debug(`${TAG}/getSendFee`, `estimated gas: ${gas}`)
-  Logger.debug(`${TAG}/getSendFee`, `gas price: ${gasPrice}`)
-  const feeInWei = gas.multipliedBy(gasPrice)
-  Logger.debug(`${TAG}/getSendFee`, `New fee is: ${feeInWei}`)
-  return feeInWei
+  const gas = await getSendTxGas(account, contractGetter, params)
+  return calculateFee(gas)
 }
 
 export function* watchQrCodeDetections() {
   while (true) {
+    // TODO(Rossy) this gets called taken multiple times before a user can press the send button
+    // Add de-bouncing logic
     const action = yield take(Actions.BARCODE_DETECTED)
     const addressToE164Number = yield select(addressToE164NumberSelector)
     const recipientCache = yield select(recipientCacheSelector)
@@ -139,6 +146,7 @@ export function* sendPaymentOrInviteSaga({
 
     if (recipientAddress) {
       yield call(sendPayment, recipientAddress, amount, comment, CURRENCY_ENUM.DOLLAR)
+      CeloAnalytics.track(CustomEventNames.send_dollar_transaction)
     } else if (recipient.e164PhoneNumber) {
       yield call(
         sendInvite,
@@ -159,7 +167,7 @@ export function* sendPaymentOrInviteSaga({
 
     yield put(sendPaymentOrInviteSuccess())
   } catch (e) {
-    yield put(showError(ErrorMessages.SEND_PAYMENT_FAILED, ERROR_BANNER_DURATION))
+    yield put(showError(ErrorMessages.SEND_PAYMENT_FAILED))
     yield put(sendPaymentOrInviteFailure())
   }
 }

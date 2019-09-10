@@ -7,24 +7,24 @@ import "openzeppelin-solidity/contracts/math/Math.sol";
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "solidity-bytes-utils/contracts/BytesLib.sol";
 
-import "./IntegerSortedLinkedList.sol";
-import "./UsingBondedDeposits.sol";
+import "./UsingLockedGold.sol";
 import "./interfaces/IGovernance.sol";
 import "../common/Initializable.sol";
+import "../common/FixidityLib.sol";
+import "../common/linkedlists/IntegerSortedLinkedList.sol";
 
 
 // TODO(asa): Hardcode minimum times for queueExpiry, etc.
 /**
  * @title A contract for making, passing, and executing on-chain governance proposals.
  */
-contract Governance is IGovernance, Ownable, Initializable, UsingBondedDeposits, ReentrancyGuard {
-  using FixidityLib for int256;
+contract Governance is IGovernance, Ownable, Initializable, UsingLockedGold, ReentrancyGuard {
+  using FixidityLib for FixidityLib.Fraction;
   using SafeMath for uint256;
   using IntegerSortedLinkedList for SortedLinkedList.List;
   using BytesLib for bytes;
 
-  // FixidityLib.fixed1().divide(FixidityLib.newFixed(2))
-  int256 constant public HALF = 500000000000000000000000;
+  uint256 constant private FIXED_HALF = 500000000000000000000000;
 
   // TODO(asa): Consider a delay stage.
   enum ProposalStage {
@@ -79,10 +79,10 @@ contract Governance is IGovernance, Ownable, Initializable, UsingBondedDeposits,
   }
 
   struct ContractConstitution {
-    int256 defaultThreshold;
+    FixidityLib.Fraction defaultThreshold;
     // Maps a function ID to a corresponding passing function, overriding the
     // default.
-    mapping(bytes4 => int256) functionThresholds;
+    mapping(bytes4 => FixidityLib.Fraction) functionThresholds;
   }
 
   struct StageDurations {
@@ -142,7 +142,7 @@ contract Governance is IGovernance, Ownable, Initializable, UsingBondedDeposits,
   event ConstitutionSet(
     address indexed destination,
     bytes4 indexed functionId,
-    int256 threshold
+    uint256 threshold
   );
 
   event ProposalQueued(
@@ -339,7 +339,7 @@ contract Governance is IGovernance, Ownable, Initializable, UsingBondedDeposits,
   function setConstitution(
     address destination,
     bytes4 functionId,
-    int256 threshold
+    uint256 threshold
   )
     external
     onlyOwner
@@ -347,11 +347,12 @@ contract Governance is IGovernance, Ownable, Initializable, UsingBondedDeposits,
     // TODO(asa): https://github.com/celo-org/celo-monorepo/pull/3414#discussion_r283588332
     require(destination != address(0));
     // Threshold has to be greater than majority and not greater than unaninimty
-    require(threshold > HALF && threshold <= FixidityLib.fixed1());
+    require(threshold > FIXED_HALF && threshold <= FixidityLib.fixed1().unwrap());
     if (functionId == 0) {
-      constitution[destination].defaultThreshold = threshold;
+      constitution[destination].defaultThreshold = FixidityLib.wrap(threshold);
     } else {
-      constitution[destination].functionThresholds[functionId] = threshold;
+      constitution[destination].functionThresholds[functionId] =
+        FixidityLib.wrap(threshold);
     }
     emit ConstitutionSet(destination, functionId, threshold);
   }
@@ -625,7 +626,7 @@ contract Governance is IGovernance, Ownable, Initializable, UsingBondedDeposits,
   }
 
   /**
-   * @notice Withdraws refunded Celo Gold deposits.
+   * @notice Withdraws refunded Celo Gold commitments.
    * @return Whether or not the withdraw was successful.
    */
   function withdraw() external nonReentrant returns (bool) {
@@ -875,17 +876,17 @@ contract Governance is IGovernance, Ownable, Initializable, UsingBondedDeposits,
     if (yesNoVotes == 0) {
       return false;
     }
-    int256 yesRatio = FixidityLib.newFixed(int256(proposal.votes.yes)).divide(
-      FixidityLib.newFixed(int256(yesNoVotes))
+    FixidityLib.Fraction memory yesRatio = FixidityLib.newFixed(proposal.votes.yes).divide(
+      FixidityLib.newFixed(yesNoVotes)
     );
 
     for (uint256 i = 0; i < proposal.transactions.length; i = i.add(1)) {
       bytes4 functionId = extractFunctionSignature(proposal.transactions[i].data);
-      int256 threshold = getConstitution(
+      FixidityLib.Fraction memory threshold = _getConstitution(
         proposal.transactions[i].destination,
         functionId
       );
-      if (yesRatio <= threshold) {
+      if (yesRatio.lte(threshold)) {
         return false;
       }
     }
@@ -994,6 +995,17 @@ contract Governance is IGovernance, Ownable, Initializable, UsingBondedDeposits,
     return proposal.timestamp > 0;
   }
 
+  function getConstitution(
+    address destination,
+    bytes4 functionId
+  )
+    external
+    view
+    returns (uint256)
+  {
+    return _getConstitution(destination, functionId).unwrap();
+  }
+
   /**
    * @notice Returns the constitution for a particular destination and function ID.
    * @param destination The destination address to get the constitution for.
@@ -1007,13 +1019,13 @@ contract Governance is IGovernance, Ownable, Initializable, UsingBondedDeposits,
   )
     public
     view
-    returns (int256)
+    returns (FixidityLib.Fraction memory)
   {
     // Default to a simple majority.
-    int256 threshold = HALF;
-    if (constitution[destination].functionThresholds[functionId] != 0) {
+    FixidityLib.Fraction memory threshold = FixidityLib.wrap(FIXED_HALF);
+    if (constitution[destination].functionThresholds[functionId].unwrap() != 0) {
       threshold = constitution[destination].functionThresholds[functionId];
-    } else if (constitution[destination].defaultThreshold != 0) {
+    } else if (constitution[destination].defaultThreshold.unwrap() != 0) {
       threshold = constitution[destination].defaultThreshold;
     }
     return threshold;

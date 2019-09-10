@@ -1,3 +1,6 @@
+import { compressedPubKey } from '@celo/utils/src/commentEncryption'
+import { getPhoneHash, isE164Number } from '@celo/utils/src/phoneNumbers'
+import { areAddressesEqual } from '@celo/utils/src/signatureUtils'
 import {
   ActionableAttestation,
   extractAttestationCodeFromMessage,
@@ -14,12 +17,9 @@ import {
   makeRevealTx,
   makeSetAccountTx,
   validateAttestationCode,
-} from '@celo/contractkit'
-import { Attestations as AttestationsType } from '@celo/contractkit/types/Attestations'
-import { StableToken as StableTokenType } from '@celo/contractkit/types/StableToken'
-import { compressedPubKey } from '@celo/utils/src/commentEncryption'
-import { getPhoneHash, isE164Number } from '@celo/utils/src/phoneNumbers'
-import { areAddressesEqual } from '@celo/utils/src/signatureUtils'
+} from '@celo/walletkit'
+import { Attestations as AttestationsType } from '@celo/walletkit/types/Attestations'
+import { StableToken as StableTokenType } from '@celo/walletkit/types/StableToken'
 import BigNumber from 'bignumber.js'
 import { Task } from 'redux-saga'
 import { all, call, delay, fork, put, race, select, take, takeEvery } from 'redux-saga/effects'
@@ -233,8 +233,10 @@ export async function requestAndRetrieveAttestations(
       account
     )
 
+    CeloAnalytics.track(CustomEventNames.verification_actionable_attestation_start)
     // Check if we have a sufficient set now by fetching the new total set
     attestations = await getActionableAttestations(attestationsContract, e164NumberHash, account)
+    CeloAnalytics.track(CustomEventNames.verification_actionable_attestation_finish)
   }
 
   return attestations
@@ -360,6 +362,7 @@ function attestationCodeReceiver(
 
       Logger.debug(TAG + '@attestationCodeReceiver', `Received code for issuer ${issuer}`)
 
+      CeloAnalytics.track(CustomEventNames.verification_validate_code_start, { issuer })
       const isValidRequest = yield call(
         validateAttestationCode,
         attestationsContract,
@@ -368,6 +371,8 @@ function attestationCodeReceiver(
         issuer,
         code
       )
+      CeloAnalytics.track(CustomEventNames.verification_validate_code_finish, { issuer })
+
       if (isValidRequest === NULL_ADDRESS) {
         throw new Error('Code is not valid')
       }

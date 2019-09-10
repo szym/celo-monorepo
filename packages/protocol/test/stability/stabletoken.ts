@@ -11,6 +11,10 @@ import {
   NULL_ADDRESS,
   timeTravel,
 } from '@celo/protocol/lib/test-utils'
+import { fixed1, toFixed, fromFixed } from '@celo/protocol/lib/fixidity'
+import { BigNumber } from 'bignumber.js'
+import * as _ from 'lodash'
+import { RegistryInstance, StableTokenInstance } from 'types'
 
 const Registry: Truffle.Contract<RegistryInstance> = artifacts.require('Registry')
 const StableToken: Truffle.Contract<StableTokenInstance> = artifacts.require('StableToken')
@@ -414,6 +418,11 @@ contract('StableToken', (accounts: string[]) => {
           lastUpdated: requestBlockTime,
         })
       }
+
+      it('setInflationParameters', async () => {
+        const res = await stableToken.setInflationParameters(fixed1, SECONDS_IN_A_WEEK)
+        await assertInflationUpdatedEvent(res.logs[0], initializationTime + SECONDS_IN_A_WEEK)
+      })
 
       it('approve', async () => {
         const res = await stableToken.approve(receiver, amount)
