@@ -1,6 +1,5 @@
 pragma solidity ^0.5.8;
 
-import "fixidity/contracts/FixidityLib.sol";
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "openzeppelin-solidity/contracts/utils/ReentrancyGuard.sol";

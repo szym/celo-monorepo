@@ -1,15 +1,13 @@
 pragma solidity ^0.5.8;
 
-import "fixidity/contracts/FixidityLib.sol";
-import "fixidity/contracts/ExponentLib.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
-
 
 import "./interfaces/IStableToken.sol";
 import "../common/interfaces/IERC20Token.sol";
 import "../common/interfaces/ICeloToken.sol";
 import "../common/Initializable.sol";
+import "../common/ExponentLib.sol";
 import "../common/FixidityLib.sol";
 import "../common/UsingRegistry.sol";
 

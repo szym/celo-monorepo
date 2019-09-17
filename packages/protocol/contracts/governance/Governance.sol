@@ -1,6 +1,5 @@
 pragma solidity ^0.5.8;
 
-import "fixidity/contracts/FixidityLib.sol";
 import "openzeppelin-solidity/contracts/utils/ReentrancyGuard.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "openzeppelin-solidity/contracts/math/Math.sol";
@@ -1013,7 +1012,7 @@ contract Governance is IGovernance, Ownable, Initializable, UsingLockedGold, Ree
    *   default.
    * @return The ratio of yes:no votes needed in order to pass the proposal.
    */
-  function getConstitution(
+  function _getConstitution(
     address destination,
     bytes4 functionId
   )
