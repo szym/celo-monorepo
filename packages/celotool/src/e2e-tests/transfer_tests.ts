@@ -1,17 +1,10 @@
-import {
-  erc20Abi,
-  getContractAddress,
-  getEnode,
-  getHooks,
-  initAndStartGeth,
-  sleep,
-} from '@celo/celotool/geth_tests/src/lib/utils'
 import { CURRENCY_ENUM } from '@celo/utils'
-import { toFixed } from '@celo/protocol/lib/fixidity'
+import { toFixed } from '@celo/utils/lib/fixidity'
 import BigNumber from 'bignumber.js'
 import { assert } from 'chai'
 import Web3 from 'web3'
 import { Tx } from 'web3/eth/types'
+import { erc20Abi, getContractAddress, getEnode, getHooks, initAndStartGeth, sleep } from './utils'
 
 const stableTokenAbi = erc20Abi.concat([
   {
@@ -322,7 +315,7 @@ describe('transfer tests', function(this: any) {
     gasCurrency?: string
   ): Promise<[boolean, any, any]> => {
     const minGasPrice = await getGasPriceMinimum(gasCurrency)
-    assert.isAbove(minGasPrice, 0)
+    assert.isAbove(parseInt(minGasPrice, 10), 0)
     const receipt = await txPromise
     const balances = await getBalances()
     const tx = await web3.eth.getTransaction(receipt.transactionHash)
@@ -435,7 +428,7 @@ describe('transfer tests', function(this: any) {
     })
   }
 
-  const GOLD_TRANSACTION_GAS_COST = 23511
+  const GOLD_TRANSACTION_GAS_COST = 29180
   const syncModes = ['full', 'fast', 'light', 'ultralight']
   for (const syncMode of syncModes) {
     describe(`when running ${syncMode} sync`, () => {
@@ -503,21 +496,12 @@ describe('transfer tests', function(this: any) {
         })
 
         describe('when paying for gas in Celo Dollars', () => {
-<<<<<<< HEAD
-          const intrinsicGas = 291000
-=======
           const intrinsicGas = 155000
->>>>>>> dc49aa235cc1968b961fbc5e1b17b9b4b5de54cd
           describe('when there is no demurrage', () => {
             describe('when setting a gas amount greater than the amount of gas necessary', () => {
               before(async function(this: any) {
                 await restartGeth(syncMode)
-
-<<<<<<< HEAD
-                const expectedGasUsed = 293511
-=======
-                const expectedGasUsed = 157511
->>>>>>> dc49aa235cc1968b961fbc5e1b17b9b4b5de54cd
+                const expectedGasUsed = 163180
                 ;[txSuccess, newBalances, expectedFees] = await runTestTransaction(
                   transferCeloGold(DEF_FROM_ADDR, DEF_TO_ADDR, DEF_AMOUNT, {
                     gasCurrency: stableTokenAddress,
@@ -582,11 +566,15 @@ describe('transfer tests', function(this: any) {
 
                 await setInflationParams(2, 1, timeSinceLastUpdated.toNumber())
 
+<<<<<<< HEAD:packages/celotool/geth_tests/transfer_tests.ts
 <<<<<<< HEAD
                 const expectedGasUsed = 293511
 =======
                 const expectedGasUsed = 157511
 >>>>>>> dc49aa235cc1968b961fbc5e1b17b9b4b5de54cd
+=======
+                const expectedGasUsed = 163180
+>>>>>>> 0101b222c9f8c356fcf41ea25aa53ec95445edd2:packages/celotool/src/e2e-tests/transfer_tests.ts
                 ;[txSuccess, newBalances, expectedFees] = await runTestTransaction(
                   transferCeloGold(DEF_FROM_ADDR, DEF_TO_ADDR, DEF_AMOUNT, {
                     gasCurrency: stableTokenAddress,
