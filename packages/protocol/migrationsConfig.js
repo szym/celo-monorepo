@@ -31,6 +31,10 @@ const DefaultConfig = {
     minDeposit: 1, // 1 cGLD
     queueExpiry: 7 * 24 * 60 * 60, // 1 week
     referendumStageDuration: 15 * 60, // 15 minutes
+    participationBaseline: 8 / 10,
+    participationBaselineFloor: 5 / 100,
+    participationBaselineUpdateFactor: 1 / 5,
+    participationBaselineQuorumFactor: 1,
   },
   gasPriceMinimum: {
     initialMinimum: 10000,
@@ -61,6 +65,8 @@ const DefaultConfig = {
     maxElectableValidators: '100',
     minLockedGoldValue: '1000000000000000000', // 1 gold
     minLockedGoldNoticePeriod: 60 * 24 * 60 * 60, // 60 days
+    electionThreshold: '0', // no threshold
+    maxGroupSize: '10',
 
     validatorKeys: [],
     // We register a single validator group during the migration.
@@ -71,19 +77,20 @@ const DefaultConfig = {
 
 const linkedLibraries = {
   FixidityLib: [
+    'LockedGold',
+    'Exchange',
+    'GasPriceMinimum',
+    'Governance',
+    'Proposals',
     'SortedOracles',
-    'SortedFractionMedianList',
-    'BondedDeposits',
     'StableToken',
     'Validators',
-    'Governance',
-    'GasPriceMinimum',
-    'Exchange',
     'LogarithmLib',
     'ExponentLib',
   ],
-  LogarithmLib: ['ExponentLib'],
   ExponentLib: ['StableToken'],
+  LogarithmLib: ['ExponentLib'],
+  Proposals: ['Governance', 'ProposalsTest'],
   LinkedList: ['AddressLinkedList', 'SortedLinkedList', 'LinkedListTest'],
   SortedLinkedList: [
     'AddressSortedLinkedList',
