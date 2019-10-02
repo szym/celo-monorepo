@@ -3,11 +3,12 @@ pragma solidity ^0.5.3;
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 
+import "fixidity/contracts/SExponentLib.sol";
+
 import "./interfaces/IStableToken.sol";
 import "../common/interfaces/IERC20Token.sol";
 import "../common/interfaces/ICeloToken.sol";
 import "../common/Initializable.sol";
-import "../common/ExponentLib.sol";
 import "../common/FixidityLib.sol";
 import "../common/UsingRegistry.sol";
 
@@ -168,26 +169,28 @@ contract StableToken is IStableToken, IERC20Token, ICeloToken, Ownable,
   {
     require(rate != 0, "Must provide a non-zero inflation rate.");
 
-    int256 partialInflationPeriods = FixidityLib.newFixed(
-      now.sub(inflationState.factorLastUpdated)
-    ).divide(FixidityLib.newFixed(
+    uint256 partialInflationPeriods = FixidityLib.newFixedFraction(
+      now.sub(inflationState.factorLastUpdated), 
       inflationState.updatePeriod
-    ));
+    ).unwrap();
 
-    int256 rateFactor = ExponentLib.powerAny(inflationState.rate, partialInflationPeriods);
+    // TODO(yorke): replace with unsigned library implementations
+    int256 tempSignedRate = int256(inflationState.rate.unwrap());
+    int256 tempSignedPartialInflationPeriods = int256(partialInflationPeriods);
+    int256 rateFactor = SExponentLib.powerAny(tempSignedRate, tempSignedPartialInflationPeriods);
 
-    inflationState.factor = inflationState.factor.multiply(rateFactor);
+    inflationState.factor = inflationState.factor.multiply(FixidityLib.wrap(uint256(rateFactor)));
     inflationState.factorLastUpdated = now;
     emit InflationFactorUpdated(
       inflationState.factor.unwrap(),
       inflationState.factorLastUpdated
     );
     
-    inflationState.rate = rate;
+    inflationState.rate = FixidityLib.wrap(rate);
     inflationState.updatePeriod = updatePeriod;
 
     emit InflationParametersUpdated(
-      inflationState.rate.unwrap(),
+      rate,
       inflationState.updatePeriod,
       inflationState.factorLastUpdated
     );
