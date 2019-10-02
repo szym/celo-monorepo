@@ -7,7 +7,6 @@ import {
   timeTravel,
   NULL_ADDRESS,
 } from '@celo/protocol/lib/test-utils'
-import { fixed1, toFixed } from '@celo/protocol/lib/fixidity'
 import BigNumber from 'bignumber.js'
 import { SortedOraclesContract, SortedOraclesInstance } from 'types'
 
@@ -116,7 +115,7 @@ contract('SortedOracles', (accounts: string[]) => {
 
     describe('when a report has been made', () => {
       beforeEach(async () => {
-        await sortedOracles.report(aToken, fixed1, NULL_ADDRESS, NULL_ADDRESS, { from: anOracle })
+        await sortedOracles.report(aToken, 1, 1, NULL_ADDRESS, NULL_ADDRESS, { from: anOracle })
       })
 
       it('should revert when only 1 report exists', async () => {
@@ -129,7 +128,7 @@ contract('SortedOracles', (accounts: string[]) => {
           for (let i = 7; i > 3; i--) {
             const anotherOracle = accounts[i]
             await sortedOracles.addOracle(aToken, anotherOracle)
-            await sortedOracles.report(aToken, toFixed(2), anOracle, NULL_ADDRESS, {
+            await sortedOracles.report(aToken, 2, 1, anOracle, NULL_ADDRESS, {
               from: anotherOracle,
             })
           }
@@ -212,7 +211,8 @@ contract('SortedOracles', (accounts: string[]) => {
           event: 'MedianUpdated',
           args: {
             token: matchAddress(aToken),
-            value: toFixed(0),
+            numerator: new BigNumber(0),
+            denominator: new BigNumber(0),
           },
         })
 
@@ -262,28 +262,16 @@ contract('SortedOracles', (accounts: string[]) => {
     })
 
     it('should increase the number of rates', async () => {
-      await sortedOracles.report(
-        aToken,
-        toFixed(numerator / denominator),
-        NULL_ADDRESS,
-        NULL_ADDRESS,
-        {
-          from: anOracle,
-        }
-      )
+      await sortedOracles.report(aToken, numerator, denominator, NULL_ADDRESS, NULL_ADDRESS, {
+        from: anOracle,
+      })
       assert.equal((await sortedOracles.numRates(aToken)).toNumber(), 1)
     })
 
     it('should set the median rate', async () => {
-      await sortedOracles.report(
-        aToken,
-        toFixed(numerator / denominator),
-        NULL_ADDRESS,
-        NULL_ADDRESS,
-        {
-          from: anOracle,
-        }
-      )
+      await sortedOracles.report(aToken, numerator, denominator, NULL_ADDRESS, NULL_ADDRESS, {
+        from: anOracle,
+      })
       const [actualNumerator, actualDenominator] = await sortedOracles.medianRate(aToken)
       assertEqualBN(actualNumerator, expectedNumerator)
       assertEqualBN(actualDenominator, expectedDenominator)
@@ -297,15 +285,9 @@ contract('SortedOracles', (accounts: string[]) => {
     })
 
     it('should set the median timestamp', async () => {
-      await sortedOracles.report(
-        aToken,
-        toFixed(numerator / denominator),
-        NULL_ADDRESS,
-        NULL_ADDRESS,
-        {
-          from: anOracle,
-        }
-      )
+      await sortedOracles.report(aToken, numerator, denominator, NULL_ADDRESS, NULL_ADDRESS, {
+        from: anOracle,
+      })
       const blockTimestamp = (await web3.eth.getBlock('latest')).timestamp
       assert.equal((await sortedOracles.medianTimestamp(aToken)).toNumber(), blockTimestamp)
     })
@@ -313,7 +295,8 @@ contract('SortedOracles', (accounts: string[]) => {
     it('should emit the OracleReported and MedianUpdated events', async () => {
       const resp = await sortedOracles.report(
         aToken,
-        toFixed(numerator / denominator),
+        numerator,
+        denominator,
         NULL_ADDRESS,
         NULL_ADDRESS,
         {
@@ -344,7 +327,7 @@ contract('SortedOracles', (accounts: string[]) => {
 
     it('should revert when called by a non-oracle', async () => {
       await assertRevert(
-        sortedOracles.report(aToken, toFixed(numerator / denominator), NULL_ADDRESS, NULL_ADDRESS)
+        sortedOracles.report(aToken, numerator, denominator, NULL_ADDRESS, NULL_ADDRESS)
       )
     })
   })

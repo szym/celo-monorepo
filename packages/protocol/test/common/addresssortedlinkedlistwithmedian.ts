@@ -1,5 +1,4 @@
 import { assertRevert, assertSameAddress, NULL_ADDRESS } from '@celo/protocol/lib/test-utils'
-import { toFixed } from '@celo/protocol/lib/fixidity'
 import BigNumber from 'bignumber.js'
 import {
   AddressSortedLinkedListWithMedianTestContract,

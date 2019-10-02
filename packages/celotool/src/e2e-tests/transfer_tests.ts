@@ -32,11 +32,19 @@ const stableTokenAbi = erc20Abi.concat([
     outputs: [
       {
         name: '',
-        type: 'int256',
+        type: 'uint256',
       },
       {
         name: '',
-        type: 'int256',
+        type: 'uint256',
+      },
+      {
+        name: '',
+        type: 'uint256',
+      },
+      {
+        name: '',
+        type: 'uint256',
       },
     ],
     payable: false,
@@ -501,6 +509,7 @@ describe('transfer tests', function(this: any) {
             describe('when setting a gas amount greater than the amount of gas necessary', () => {
               before(async function(this: any) {
                 await restartGeth(syncMode)
+
                 const expectedGasUsed = 163180
                 ;[txSuccess, newBalances, expectedFees] = await runTestTransaction(
                   transferCeloGold(DEF_FROM_ADDR, DEF_TO_ADDR, DEF_AMOUNT, {
@@ -566,15 +575,7 @@ describe('transfer tests', function(this: any) {
 
                 await setInflationParams(2, 1, timeSinceLastUpdated.toNumber())
 
-<<<<<<< HEAD:packages/celotool/geth_tests/transfer_tests.ts
-<<<<<<< HEAD
-                const expectedGasUsed = 293511
-=======
-                const expectedGasUsed = 157511
->>>>>>> dc49aa235cc1968b961fbc5e1b17b9b4b5de54cd
-=======
                 const expectedGasUsed = 163180
->>>>>>> 0101b222c9f8c356fcf41ea25aa53ec95445edd2:packages/celotool/src/e2e-tests/transfer_tests.ts
                 ;[txSuccess, newBalances, expectedFees] = await runTestTransaction(
                   transferCeloGold(DEF_FROM_ADDR, DEF_TO_ADDR, DEF_AMOUNT, {
                     gasCurrency: stableTokenAddress,
@@ -739,11 +740,7 @@ describe('transfer tests', function(this: any) {
           before(async function(this: any) {
             await restartGeth(syncMode)
 
-<<<<<<< HEAD
-            const expectedGasUsed = 331014
-=======
             const expectedGasUsed = 189456
->>>>>>> dc49aa235cc1968b961fbc5e1b17b9b4b5de54cd
             ;[txSuccess, newBalances, expectedFees] = await runTestTransaction(
               transferCeloDollars(DEF_FROM_ADDR, DEF_TO_ADDR, DEF_AMOUNT, {
                 gasCurrency: stableTokenAddress,
@@ -760,11 +757,7 @@ describe('transfer tests', function(this: any) {
           before(async function(this: any) {
             await restartGeth(syncMode)
 
-<<<<<<< HEAD
-            const expectedGasUsed = 61014
-=======
             const expectedGasUsed = 55456
->>>>>>> dc49aa235cc1968b961fbc5e1b17b9b4b5de54cd
             ;[txSuccess, newBalances, expectedFees] = await runTestTransaction(
               transferCeloDollars(DEF_FROM_ADDR, DEF_TO_ADDR, DEF_AMOUNT, {
                 gasFeeRecipient: feeRecipientAddress,

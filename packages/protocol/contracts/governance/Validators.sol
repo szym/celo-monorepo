@@ -24,7 +24,6 @@ contract Validators is IValidators, Ownable, ReentrancyGuard, Initializable, Usi
   using FixidityLib for FixidityLib.Fraction;
   using AddressLinkedList for LinkedList.List;
   using AddressSortedLinkedList for SortedLinkedList.List;
-  using FixidityLib for int256;
   using SafeMath for uint256;
   using BytesLib for bytes;
 

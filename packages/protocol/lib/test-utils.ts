@@ -1,3 +1,4 @@
+import { hasEntryInRegistry, usesRegistry } from '@celo/protocol/lib/registry-utils'
 import BigNumber from 'bignumber.js'
 import * as chai from 'chai'
 import * as chaiSubset from 'chai-subset'
