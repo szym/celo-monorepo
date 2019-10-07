@@ -70,7 +70,7 @@ const NuxStack = createStackNavigator(
     [Screens.JoinCelo]: { screen: JoinCelo },
     [Screens.PincodeEducation]: { screen: PincodeEducation },
     [Screens.PincodeSet]: { screen: PincodeSet },
-    [Screens.EnterInviteCode]: { screen: EnterInviteCode },
+    [Screens.EnterInviteCode]: { screen: EnterInviteCode, path: 'enterInvite/:inviteCode' },
     [Screens.ImportWallet]: { screen: ImportWallet },
     [Screens.ImportContacts]: { screen: ImportContacts },
     [Screens.VerifyEducation]: { screen: VerifyEducation },

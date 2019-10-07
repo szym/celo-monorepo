@@ -6,6 +6,7 @@ import AlertBanner from 'src/alert/AlertBanner'
 import { recordStateChange, setTopLevelNavigator } from 'src/navigator/NavigationService'
 import Navigator from 'src/navigator/Navigator'
 import BackupPrompt from 'src/shared/BackupPrompt'
+import { appPrefix } from 'src/utils/linking'
 
 const navigationStateChange = (prev: NavigationState, current: NavigationState) =>
   recordStateChange(prev, current)
@@ -26,7 +27,11 @@ export class NavigatorWrapper extends React.Component<Props> {
   render() {
     return (
       <View style={styles.container}>
-        <AppContainer ref={this.setNavigator} onNavigationStateChange={navigationStateChange} />
+        <AppContainer
+          ref={this.setNavigator}
+          onNavigationStateChange={navigationStateChange}
+          uriPrefix={appPrefix}
+        />
         <View style={styles.floating}>
           <BackupPrompt />
           <AlertBanner />

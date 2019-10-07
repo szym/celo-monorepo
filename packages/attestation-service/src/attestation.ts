@@ -18,7 +18,7 @@ function toBase64(str: string) {
 }
 
 function createAttestationTextMessage(attestationCode: string) {
-  return `<#> ${toBase64(attestationCode)} ${process.env.APP_SIGNATURE}`
+  return `celo://${toBase64(attestationCode)} ${process.env.APP_SIGNATURE}`
 }
 
 export async function handleAttestationRequest(req: express.Request, res: express.Response) {

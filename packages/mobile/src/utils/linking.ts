@@ -5,6 +5,8 @@ import Logger from 'src/utils/Logger'
 
 const TAG = 'utils/linking'
 
+export const appPrefix = 'celo://'
+
 export function navigateToVerifierApp() {
   navigateToURI(CELO_VERIFIER_START_MINING_LINK, CELO_VERIFIER_DOWNLOAD_LINK)
 }

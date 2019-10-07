@@ -61,7 +61,7 @@ export async function sendSmsCode(address: string, phoneNumber: string, message:
 
 function getFormattedMessage(message: string) {
   // Add app signature to enable SMS retriever API
-  message = `<#> ${message} ${appSignature}`
+  message = `celo://${message} ${appSignature}`
   if (message.length >= SMS_LENGTH_LIMIT) {
     console.warn('SMS too long, attempting to shorten', message)
     // TODO remove when miner nodes don't include this string anymore
