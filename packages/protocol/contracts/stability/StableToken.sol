@@ -169,17 +169,18 @@ contract StableToken is IStableToken, IERC20Token, ICeloToken, Ownable,
   {
     require(rate != 0, "Must provide a non-zero inflation rate.");
 
-    uint256 partialInflationPeriods = FixidityLib.newFixedFraction(
+    FixidityLib.Fraction memory partialInflationPeriods = FixidityLib.newFixedFraction(
       now.sub(inflationState.factorLastUpdated), 
       inflationState.updatePeriod
-    ).unwrap();
+    );
 
-    // TODO(yorke): replace with unsigned library implementations
-    int256 tempSignedRate = int256(inflationState.rate.unwrap());
-    int256 tempSignedPartialInflationPeriods = int256(partialInflationPeriods);
-    int256 rateFactor = SExponentLib.powerAny(tempSignedRate, tempSignedPartialInflationPeriods);
+    inflationState.factor = fractionMulExp(
+      inflationState.factor, 
+      inflationState.rate,
+      partialInflationPeriods,
+      decimals_
+    );
 
-    inflationState.factor = inflationState.factor.multiply(FixidityLib.wrap(uint256(rateFactor)));
     inflationState.factorLastUpdated = now;
     emit InflationFactorUpdated(
       inflationState.factor.unwrap(),
@@ -475,30 +476,17 @@ contract StableToken is IStableToken, IERC20Token, ICeloToken, Ownable,
       return (inflationState.factor, inflationState.factorLastUpdated);
     }
 
-    uint256 numerator;
-    uint256 denominator;
-
     uint256 timesToApplyInflation = now.sub(inflationState.factorLastUpdated).div(
       inflationState.updatePeriod
     );
 
-    (numerator, denominator) = fractionMulExp(
-      inflationState.factor.unwrap(),
-      FixidityLib.fixed1().unwrap(),
-      inflationState.rate.unwrap(),
-      FixidityLib.fixed1().unwrap(),
-      timesToApplyInflation,
+    FixidityLib.Fraction memory currentInflationFactor = fractionMulExp(
+      inflationState.factor,
+      inflationState.rate,
+      FixidityLib.wrap(timesToApplyInflation),
       decimals_
     );
-
-    // This should never happen. If something went wrong updating the
-    // inflation factor, keep the previous factor
-    if (numerator == 0 || denominator == 0) {
-      return (inflationState.factor, inflationState.factorLastUpdated);
-    }
-
-    FixidityLib.Fraction memory currentInflationFactor =
-      FixidityLib.wrap(numerator).divide(FixidityLib.wrap(denominator));
+    
     uint256 lastUpdated = inflationState.factorLastUpdated.add(
       inflationState.updatePeriod.mul(timesToApplyInflation)
     );
@@ -508,28 +496,20 @@ contract StableToken is IStableToken, IERC20Token, ICeloToken, Ownable,
   }
 
   /**
-   * @notice calculate a * b^x for fractions a, b to `decimals` precision
-   * @param aNumerator Numerator of first fraction
-   * @param aDenominator Denominator of first fraction
-   * @param bNumerator Numerator of exponentiated fraction
-   * @param bDenominator Denominator of exponentiated fraction
-   * @param exponent exponent to raise b to
+   * @notice calculate a * b^e for fractions a, b, e to `decimals` precision
    * @param _decimals precision
    * @return numerator/denominator of the computed quantity (not reduced).
    */
   function fractionMulExp(
-    uint256 aNumerator,
-    uint256 aDenominator,
-    uint256 bNumerator,
-    uint256 bDenominator,
-    uint256 exponent,
+    FixidityLib.Fraction memory a,
+    FixidityLib.Fraction memory b,
+    FixidityLib.Fraction memory e,
     uint256 _decimals
   )
-    public
+    internal
     view
-    returns(uint256, uint256)
+    returns (FixidityLib.Fraction memory)
   {
-    require(aDenominator != 0 && bDenominator != 0);
     uint256 returnNumerator;
     uint256 returnDenominator;
     // solhint-disable-next-line no-inline-assembly
@@ -537,11 +517,10 @@ contract StableToken is IStableToken, IERC20Token, ICeloToken, Ownable,
       let newCallDataPosition := mload(0x40)
       mstore(0x40, add(newCallDataPosition, calldatasize))
       mstore(newCallDataPosition, aNumerator)
-      mstore(add(newCallDataPosition, 32), aDenominator)
-      mstore(add(newCallDataPosition, 64), bNumerator)
-      mstore(add(newCallDataPosition, 96), bDenominator)
-      mstore(add(newCallDataPosition, 128), exponent)
-      mstore(add(newCallDataPosition, 160), _decimals)
+      mstore(add(newCallDataPosition, 32), a.unwrap())
+      mstore(add(newCallDataPosition, 64), b.unwrap())
+      mstore(add(newCallDataPosition, 96), e.unwrap())
+      mstore(add(newCallDataPosition, 128), _decimals)
       let delegatecallSuccess := staticcall(
         1050,                 // estimated gas cost for this function
         0xfc,
@@ -565,7 +544,7 @@ contract StableToken is IStableToken, IERC20Token, ICeloToken, Ownable,
         returnDenominator := mload(add(returnDataPosition, 32))
       }
     }
-    return (returnNumerator, returnDenominator);
+    return returnNumerator, returnDenominator);
   }
 
   /**
