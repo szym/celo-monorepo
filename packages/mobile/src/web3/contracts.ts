@@ -1,12 +1,11 @@
 import { addLocalAccount as web3utilsAddLocalAccount } from '@celo/walletkit'
 import { Platform } from 'react-native'
-import { DocumentDirectoryPath } from 'react-native-fs'
 import * as net from 'react-native-tcp'
 import { DEFAULT_INFURA_URL, DEFAULT_TESTNET } from 'src/config'
 import { GethSyncMode } from 'src/geth/consts'
-import config from 'src/geth/network-config'
+import { IPC_PATH } from 'src/geth/geth'
+import networkConfig, { Testnets } from 'src/geth/networkConfig'
 import Logger from 'src/utils/Logger'
-import { Testnets } from 'src/web3/testnets'
 import Web3 from 'web3'
 import { Provider } from 'web3/providers'
 
@@ -16,16 +15,13 @@ const tag = 'web3/contracts'
 export const web3: Web3 = getWeb3()
 
 export function isZeroSyncMode(): boolean {
-  return config[DEFAULT_TESTNET].syncMode === GethSyncMode.ZeroSync
+  return networkConfig.syncMode === GethSyncMode.ZeroSync
 }
 
 function getIpcProvider(testnet: Testnets) {
   Logger.debug(tag, 'creating IPCProvider...')
 
-  const ipcProvider = new Web3.providers.IpcProvider(
-    `${DocumentDirectoryPath}/.${testnet}/geth.ipc`,
-    net
-  )
+  const ipcProvider = new Web3.providers.IpcProvider(IPC_PATH, net)
   Logger.debug(tag, 'created IPCProvider')
 
   // More details on the IPC objects can be seen via this
@@ -59,16 +55,6 @@ function getIpcProvider(testnet: Testnets) {
   return ipcProvider
 }
 
-// Use Http provider on iOS until we add support for local socket on iOS in react-native-tcp
-function getWeb3HttpProviderForIos(): Provider {
-  Logger.debug(tag, 'creating HttpProvider for iOS...')
-
-  const httpProvider = new Web3.providers.HttpProvider('http://localhost:8545')
-  Logger.debug(tag, 'created HttpProvider for iOS')
-
-  return httpProvider
-}
-
 function getWebSocketProvider(url: string): Provider {
   Logger.debug(tag, 'creating HttpProvider...')
   const provider = new Web3.providers.HttpProvider(url)
@@ -90,9 +76,6 @@ function getWeb3(): Web3 {
     const url = DEFAULT_INFURA_URL
     Logger.debug('contracts@getWeb3', `Connecting to url ${url}`)
     return new Web3(getWebSocketProvider(url))
-  } else if (Platform.OS === 'ios') {
-    // iOS + local geth
-    return new Web3(getWeb3HttpProviderForIos())
   } else {
     return new Web3(getIpcProvider(DEFAULT_TESTNET))
   }
