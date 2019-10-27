@@ -3,14 +3,13 @@ pragma solidity ^0.5.3;
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 
-import "fixidity/contracts/SExponentLib.sol";
-
 import "./interfaces/IStableToken.sol";
 import "../common/interfaces/IERC20Token.sol";
 import "../common/interfaces/ICeloToken.sol";
 import "../common/Initializable.sol";
 import "../common/FixidityLib.sol";
 import "../common/UsingRegistry.sol";
+import "../common/UsingPrecompiles.sol";
 
 
 /**
@@ -18,11 +17,9 @@ import "../common/UsingRegistry.sol";
  */
 // solhint-disable-next-line max-line-length
 contract StableToken is IStableToken, IERC20Token, ICeloToken, Ownable,
-  Initializable, UsingRegistry {
+  Initializable, UsingRegistry, UsingPrecompiles {
   using FixidityLib for FixidityLib.Fraction;
   using SafeMath for uint256;
-
-  event MinterSet(address indexed _minter);
 
   event InflationFactorUpdated(
     uint256 factor,
@@ -45,7 +42,6 @@ contract StableToken is IStableToken, IERC20Token, ICeloToken, Ownable,
     string comment
   );
 
-  address public minter;
   string internal name_;
   string internal symbol_;
   uint8 internal decimals_;
@@ -71,14 +67,6 @@ contract StableToken is IStableToken, IERC20Token, ICeloToken, Ownable,
   }
 
   InflationState inflationState;
-
-  /**
-   * @notice Throws if called by any account other than the minter.
-   */
-  modifier onlyMinter() {
-    require(msg.sender == minter, "sender was not minter");
-    _;
-  }
 
   /**
    * Only VM would be able to set the caller address to 0x0 unless someone
@@ -124,12 +112,15 @@ contract StableToken is IStableToken, IERC20Token, ICeloToken, Ownable,
     uint8 _decimals,
     address registryAddress,
     uint256 inflationRate,
-    uint256 inflationFactorUpdatePeriod
+    uint256 inflationFactorUpdatePeriod,
+    address[] calldata initialBalanceAddresses,
+    uint256[] calldata initialBalanceValues
   )
     external
     initializer
   {
     require(inflationRate != 0, "Must provide a non-zero inflation rate.");
+
     _transferOwnership(msg.sender);
     totalSupply_ = 0;
     name_ = _name;
@@ -142,17 +133,11 @@ contract StableToken is IStableToken, IERC20Token, ICeloToken, Ownable,
     // solhint-disable-next-line not-rely-on-time
     inflationState.factorLastUpdated = now;
 
+    require(initialBalanceAddresses.length == initialBalanceValues.length);
+    for (uint256 i = 0; i < initialBalanceAddresses.length; i = i.add(1)) {
+      require(_mint(initialBalanceAddresses[i], initialBalanceValues[i]));
+    }
     setRegistry(registryAddress);
-  }
-
-  // Should this be tied to the registry?
-  /**
-   * @notice Updates 'minter'.
-   * @param _minter An address with special permissions to modify its balance
-   */
-  function setMinter(address _minter) external onlyOwner {
-    minter = _minter;
-    emit MinterSet(minter);
   }
 
   /**
@@ -268,7 +253,27 @@ contract StableToken is IStableToken, IERC20Token, ICeloToken, Ownable,
     uint256 value
   )
     external
-    onlyMinter
+    updateInflationFactor
+    returns (bool)
+  {
+    // Only the Exchange and Validators contracts are authorized to mint.
+    require(
+      msg.sender == registry.getAddressFor(EXCHANGE_REGISTRY_ID) ||
+      msg.sender == registry.getAddressFor(VALIDATORS_REGISTRY_ID)
+    );
+    return _mint(to, value);
+  }
+
+  /**
+   * @notice Mints new StableToken and gives it to 'to'.
+   * @param to The account for which to mint tokens.
+   * @param value The amount of StableToken to mint.
+   */
+  function _mint(
+    address to,
+    uint256 value
+  )
+    private
     updateInflationFactor
     returns (bool)
   {
@@ -301,10 +306,17 @@ contract StableToken is IStableToken, IERC20Token, ICeloToken, Ownable,
   }
 
   /**
-   * @notice Burns StableToken from the balance of 'minter'.
+   * @notice Burns StableToken from the balance of msg.sender.
    * @param value The amount of StableToken to burn.
    */
-  function burn(uint256 value) external onlyMinter updateInflationFactor returns (bool) {
+  function burn(
+    uint256 value
+  )
+    external
+    onlyRegisteredContract(EXCHANGE_REGISTRY_ID)
+    updateInflationFactor
+    returns (bool)
+  {
     uint256 units = _valueToUnits(inflationState.factor, value);
     require(units <= balances[msg.sender], "value exceeded balance of sender");
     totalSupply_ = totalSupply_.sub(units);
@@ -495,57 +507,6 @@ contract StableToken is IStableToken, IERC20Token, ICeloToken, Ownable,
     /* solhint-enable not-rely-on-time */
   }
 
-  /**
-   * @notice calculate a * b^e for fractions a, b, e to `decimals` precision
-   * @param _decimals precision
-   * @return numerator/denominator of the computed quantity (not reduced).
-   */
-  function fractionMulExp(
-    FixidityLib.Fraction memory a,
-    FixidityLib.Fraction memory b,
-    FixidityLib.Fraction memory e,
-    uint256 _decimals
-  )
-    internal
-    view
-    returns (FixidityLib.Fraction memory)
-  {
-    uint256 returnNumerator;
-    uint256 returnDenominator;
-    // solhint-disable-next-line no-inline-assembly
-    assembly {
-      let newCallDataPosition := mload(0x40)
-      mstore(0x40, add(newCallDataPosition, calldatasize))
-      mstore(newCallDataPosition, aNumerator)
-      mstore(add(newCallDataPosition, 32), a.unwrap())
-      mstore(add(newCallDataPosition, 64), b.unwrap())
-      mstore(add(newCallDataPosition, 96), e.unwrap())
-      mstore(add(newCallDataPosition, 128), _decimals)
-      let delegatecallSuccess := staticcall(
-        1050,                 // estimated gas cost for this function
-        0xfc,
-        newCallDataPosition,
-        0xc4,                 // input size, 6 * 32 = 192 bytes
-        0,
-        0
-      )
-
-      let returnDataSize := returndatasize
-      let returnDataPosition := mload(0x40)
-      mstore(0x40, add(returnDataPosition, returnDataSize))
-      returndatacopy(returnDataPosition, 0, returnDataSize)
-
-      switch delegatecallSuccess
-      case 0 {
-        revert(returnDataPosition, returnDataSize)
-      }
-      default {
-        returnNumerator := mload(returnDataPosition)
-        returnDenominator := mload(add(returnDataPosition, 32))
-      }
-    }
-    return returnNumerator, returnDenominator);
-  }
 
   /**
    * @notice Transfers `value` from `msg.sender` to `to`
