@@ -452,22 +452,16 @@ contract Validators is
   function _updateValidatorScore(address validator, uint256 uptime) internal {
     address account = getLockedGold().getAccountFromValidator(validator);
     require(isValidator(account), "isvalidator");
-    require(uptime <= FixidityLib.fixed1().unwrap(), "uptime");
+    FixidityLib.Fraction memory uptimeFrac = FixidityLib.wrap(uptime);
+    require(uptimeFrac.isProperFraction(), "uptime");
 
-    uint256 numerator;
-    uint256 denominator;
-    (numerator, denominator) = fractionMulExp(
-      FixidityLib.fixed1().unwrap(),
-      FixidityLib.fixed1().unwrap(),
-      uptime,
-      FixidityLib.fixed1().unwrap(),
+    FixidityLib.Fraction memory epochScore = fractionMulExp(
+      FixidityLib.fixed1(),
+      uptimeFrac,
       validatorScoreParameters.exponent,
       18
     );
 
-    FixidityLib.Fraction memory epochScore = FixidityLib.wrap(numerator).divide(
-      FixidityLib.wrap(denominator)
-    );
     FixidityLib.Fraction memory newComponent = validatorScoreParameters.adjustmentSpeed.multiply(
       epochScore
     );

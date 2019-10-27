@@ -1,47 +1,44 @@
 pragma solidity ^0.5.3;
 
+import "./FixidityLib.sol";
+
 contract UsingPrecompiles {
+  using FixidityLib for FixidityLib.Fraction;
 
   /**
-   * @notice calculate a * b^x for fractions a, b to `decimals` precision
-   * @param aNumerator Numerator of first fraction
-   * @param aDenominator Denominator of first fraction
-   * @param bNumerator Numerator of exponentiated fraction
-   * @param bDenominator Denominator of exponentiated fraction
-   * @param exponent exponent to raise b to
-   * @param _decimals precision
+   * @notice calculate a * b^e for fractions a, b, e to `decimals` precision
+   * @param decimals precision
    * @return numerator/denominator of the computed quantity (not reduced).
    */
   function fractionMulExp(
-    uint256 aNumerator,
-    uint256 aDenominator,
-    uint256 bNumerator,
-    uint256 bDenominator,
-    uint256 exponent,
-    uint256 _decimals
+    FixidityLib.Fraction memory a,
+    FixidityLib.Fraction memory b,
+    FixidityLib.Fraction memory e,
+    uint256 decimals
   )
-    public
+    internal
     view
-    returns (uint256, uint256)
+    returns (FixidityLib.Fraction memory)
   {
-    require(aDenominator != 0 && bDenominator != 0);
+    uint256 aValue = a.unwrap();
+    uint256 bValue = b.unwrap();
+    uint256 eValue = e.unwrap();
+
     uint256 returnNumerator;
     uint256 returnDenominator;
     // solhint-disable-next-line no-inline-assembly
     assembly {
       let newCallDataPosition := mload(0x40)
       mstore(0x40, add(newCallDataPosition, calldatasize))
-      mstore(newCallDataPosition, aNumerator)
-      mstore(add(newCallDataPosition, 32), aDenominator)
-      mstore(add(newCallDataPosition, 64), bNumerator)
-      mstore(add(newCallDataPosition, 96), bDenominator)
-      mstore(add(newCallDataPosition, 128), exponent)
-      mstore(add(newCallDataPosition, 160), _decimals)
-      let success := staticcall(
+      mstore(newCallDataPosition, aValue)
+      mstore(add(newCallDataPosition, 32), bValue)
+      mstore(add(newCallDataPosition, 64), eValue)
+      mstore(add(newCallDataPosition, 96), decimals)
+      let delegatecallSuccess := staticcall(
         1050,                 // estimated gas cost for this function
         0xfc,
         newCallDataPosition,
-        0xc4,                 // input size, 6 * 32 = 192 bytes
+        0x80,                 // input size, 4 * 32 = 128 bytes
         0,
         0
       )
@@ -51,7 +48,7 @@ contract UsingPrecompiles {
       mstore(0x40, add(returnDataPosition, returnDataSize))
       returndatacopy(returnDataPosition, 0, returnDataSize)
 
-      switch success
+      switch delegatecallSuccess
       case 0 {
         revert(returnDataPosition, returnDataSize)
       }
@@ -60,7 +57,8 @@ contract UsingPrecompiles {
         returnDenominator := mload(add(returnDataPosition, 32))
       }
     }
-    return (returnNumerator, returnDenominator);
+    
+    return FixidityLib.newFixedFraction(returnNumerator, returnDenominator);
   }
 
   /**
