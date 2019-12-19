@@ -9,6 +9,7 @@ import SafeAreaView from 'react-native-safe-area-view'
 import { connect } from 'react-redux'
 import { errorSelector } from 'src/alert/reducer'
 import { componentWithAnalytics } from 'src/analytics/wrapper'
+import { setNumberVerified } from 'src/app/actions'
 import { ErrorMessages } from 'src/app/ErrorMessages'
 import DevSkipButton from 'src/components/DevSkipButton'
 import GethAwareButton from 'src/geth/GethAwareButton'
@@ -16,7 +17,7 @@ import { Namespaces, withTranslation } from 'src/i18n'
 import VerifyAddressBook from 'src/icons/VerifyAddressBook'
 import { denyImportContacts, importContacts } from 'src/identity/actions'
 import { nuxNavigationOptionsNoBackButton } from 'src/navigator/Headers'
-import { navigate } from 'src/navigator/NavigationService'
+import { navigate, navigateHome } from 'src/navigator/NavigationService'
 import { Screens } from 'src/navigator/Screens'
 import { RootState } from 'src/redux/reducers'
 import { requestContactsPermission } from 'src/utils/permissions'
@@ -24,11 +25,13 @@ import { requestContactsPermission } from 'src/utils/permissions'
 interface DispatchProps {
   importContacts: typeof importContacts
   denyImportContacts: typeof denyImportContacts
+  setNumberVerified: typeof setNumberVerified
 }
 
 interface StateProps {
   error: ErrorMessages | null
   isLoadingImportContacts: boolean
+  numberVerified: boolean
 }
 
 interface State {
@@ -41,6 +44,7 @@ const mapStateToProps = (state: RootState): StateProps => {
   return {
     error: errorSelector(state),
     isLoadingImportContacts: state.identity.isLoadingImportContacts,
+    numberVerified: state.app.numberVerified,
   }
 }
 
@@ -74,7 +78,11 @@ class ImportContacts extends React.Component<Props, State> {
   }
 
   nextScreen = () => {
-    navigate(Screens.VerificationEducationScreen)
+    if (this.props.numberVerified) {
+      navigateHome()
+    } else {
+      navigate(Screens.VerificationEducationScreen)
+    }
   }
 
   onPressEnable = async () => {
@@ -189,6 +197,7 @@ export default componentWithAnalytics(
     {
       importContacts,
       denyImportContacts,
+      setNumberVerified,
     }
     // @ts-ignore getDerivedStateFromProps seems to make TS unhappy here
   )(withTranslation(Namespaces.nuxNamePin1)(ImportContacts))
