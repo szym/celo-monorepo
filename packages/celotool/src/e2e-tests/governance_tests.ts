@@ -5,6 +5,7 @@ import { getBlsPoP, getBlsPublicKey } from '@celo/utils/lib/bls'
 import { fromFixed, toFixed } from '@celo/utils/lib/fixidity'
 import BigNumber from 'bignumber.js'
 import { assert } from 'chai'
+import * as rlp from 'rlp'
 import Web3 from 'web3'
 import {
   assertAlmostEqual,
@@ -430,13 +431,14 @@ describe('governance tests', () => {
       try {
         const block = await web3.eth.getBlock(123)
         // console.log('header', block)
+        const blockRlp = rlp.encode(headerArray(web3, block))
 
         const downtimeSlasher = await kit._web3Contracts.getDowntimeSlasher()
         const elect = await kit._web3Contracts.getElection()
 
         console.log('signers', await elect.methods.getCurrentValidatorSigners().call())
 
-        const hash = await downtimeSlasher.methods.hashHeader(block.raw).call()
+        const hash = await downtimeSlasher.methods.hashHeader(blockRlp).call()
         console.info('hash', hash)
 
         const signer = await downtimeSlasher.methods.validatorSignerAddressFromSet(2, 100).call()
@@ -445,7 +447,7 @@ describe('governance tests', () => {
         console.info('at block', await web3.eth.getBlockNumber())
 
         const bitmap = await downtimeSlasher.methods
-          .getVerifiedSealBitmapFromHeader(block.raw)
+          .getVerifiedSealBitmapFromHeader(blockRlp)
           .call({ gas: 1000000 })
         console.info('bitmap', bitmap)
       } catch (err) {
@@ -464,14 +466,14 @@ describe('governance tests', () => {
         console.info('at block', await web3.eth.getBlockNumber())
         console.log('signers', await elect.methods.getCurrentValidatorSigners().call())
 
-        const other = doubleSigningBlock.raw
+        const other = rlp.encode(headerArray(web3, doubleSigningBlock))
 
-        console.log('at 245', (await web3.eth.getBlock(245)).raw)
+        //console.log('at 245', (await web3.eth.getBlock(245)).raw)
 
         const num = await slasher.methods.getBlockNumberFromHeader(other).call()
         console.log('number', num)
 
-        const header = (await web3.eth.getBlock(num)).raw
+        const header = rlp.encode(headerArray(web3, await web3.eth.getBlock(num)))
 
         const bitmap2 = await slasher.methods.getVerifiedSealBitmapFromHeader(other).call()
         const bitmap = await slasher.methods.getVerifiedSealBitmapFromHeader(header).call()
@@ -1100,3 +1102,23 @@ describe('governance tests', () => {
     })
   })
 })
+
+function headerArray(web3: Web3, block: any) {
+  return [
+    block.parentHash,
+    block.sha3Uncles,
+    block.miner,
+    block.stateRoot,
+    block.transactionsRoot,
+    block.receiptsRoot,
+    block.logsBloom,
+    web3.utils.toHex(block.difficulty),
+    block.number,
+    block.gasLimit,
+    block.gasUsed,
+    block.timestamp,
+    block.extraData,
+    block.mixHash,
+    block.nonce,
+  ]
+}
