@@ -1,14 +1,14 @@
 // tslint:disable-next-line: no-reference (Required to make this work w/ ts-node)
 /// <reference path="../../../contractkit/types/web3.d.ts" />
 
-import { ContractKit, newKit, newKitFromWeb3 } from '@celo/contractkit'
+import { ContractKit, newKitFromWeb3 } from '@celo/contractkit'
 import { NULL_ADDRESS } from '@celo/utils/lib/address'
 import BigNumber from 'bignumber.js'
 import { assert } from 'chai'
 import * as rlp from 'rlp'
 import Web3 from 'web3'
-import { getHooks, GethTestConfig, sleep } from './utils'
-import { getContext, GethInstanceConfig, initAndStartGeth, waitToFinishSyncing } from './utils'
+import { GethTestConfig, sleep } from './utils'
+import { getContext } from './utils'
 
 /*interface IstanbulAggregatedSeal {
   bitmap: number,
@@ -26,19 +26,17 @@ interface IstanbulExtraData {
   epochData: string,
 }*/
 
-describe('Slashing tests', function(this: any) {
-  this.timeout(0)
-
-  let kit: ContractKit
-  let accounts: any
-  let validators: any
-
+describe('slashing tests', function(this: any) {
   const gethConfig: GethTestConfig = {
-    migrateTo: 18,
+    migrate: true,
     instances: [
+      // Validators 0 and 1 are swapped in and out of the group.
       { name: 'validator0', validating: true, syncmode: 'full', port: 30303, rpcport: 8545 },
       { name: 'validator1', validating: true, syncmode: 'full', port: 30305, rpcport: 8547 },
+      // Validator 2 will authorize a validating key every other epoch.
       { name: 'validator2', validating: true, syncmode: 'full', port: 30307, rpcport: 8549 },
+      { name: 'validator3', validating: true, syncmode: 'full', port: 30309, rpcport: 8551 },
+      { name: 'validator4', validating: true, syncmode: 'full', port: 30311, rpcport: 8553 },
     ],
   }
 
@@ -56,22 +54,41 @@ describe('Slashing tests', function(this: any) {
 
   const context: any = getContext(gethConfig)
   const contextDown: any = getContext(gethConfigDown)
-  const hooks = getHooks(gethConfig)
-  before(hooks.before)
-  after(hooks.after)
+  let web3: any
+  //let election: any
+  //let stableToken: any
+  //let sortedOracles: any
+  //let epochRewards: any
+  //let goldToken: any
+  //let registry: any
+  //let reserve: any
+  //let validators: any
+  //let accounts: any
+  let kit: ContractKit
 
-  const validatorAddress: string = '0x47e172f6cfb6c7d01c1574fa3e2be7cc73269d95'
+  before(async function(this: any) {
+    this.timeout(0)
+    await context.hooks.before()
+  })
 
-  const restartGeth = async () => {
-    // Restart the validator node
-    await hooks.restart()
+  after(context.hooks.after)
 
-    // TODO(mcortesi): magic sleep. without it unlockAccount sometimes fails
-    await sleep(2)
-    kit = newKit('http://localhost:8545')
-    await kit.web3.eth.personal.unlockAccount(validatorAddress, '', 1000)
-    validators = await kit._web3Contracts.getValidators()
-    accounts = await kit._web3Contracts.getAccounts()
+  //const validatorAddress: string = '0x47e172f6cfb6c7d01c1574fa3e2be7cc73269d95'
+
+  const restart = async () => {
+    await context.hooks.restart()
+    web3 = new Web3('http://localhost:8545')
+    kit = newKitFromWeb3(web3)
+    console.log(await web3.eth.getAccounts())
+    //goldToken = await kit._web3Contracts.getGoldToken()
+    //stableToken = await kit._web3Contracts.getStableToken()
+    //sortedOracles = await kit._web3Contracts.getSortedOracles()
+    //validators = await kit._web3Contracts.getValidators()
+    //registry = await kit._web3Contracts.getRegistry()
+    //reserve = await kit._web3Contracts.getReserve()
+    //election = await kit._web3Contracts.getElection()
+    //epochRewards = await kit._web3Contracts.getEpochRewards()
+    //accounts = await kit._web3Contracts.getAccounts()
   }
 
   const restartWithDowntime = async () => {
@@ -79,24 +96,24 @@ describe('Slashing tests', function(this: any) {
     web3 = new Web3('http://localhost:8545')
     kit = newKitFromWeb3(web3)
     console.log(await web3.eth.getAccounts())
-    goldToken = await kit._web3Contracts.getGoldToken()
-    stableToken = await kit._web3Contracts.getStableToken()
-    sortedOracles = await kit._web3Contracts.getSortedOracles()
-    validators = await kit._web3Contracts.getValidators()
-    registry = await kit._web3Contracts.getRegistry()
-    reserve = await kit._web3Contracts.getReserve()
-    election = await kit._web3Contracts.getElection()
-    epochRewards = await kit._web3Contracts.getEpochRewards()
-    accounts = await kit._web3Contracts.getAccounts()
+    //goldToken = await kit._web3Contracts.getGoldToken()
+    //stableToken = await kit._web3Contracts.getStableToken()
+    //sortedOracles = await kit._web3Contracts.getSortedOracles()
+    //validators = await kit._web3Contracts.getValidators()
+    //registry = await kit._web3Contracts.getRegistry()
+    //reserve = await kit._web3Contracts.getReserve()
+    //election = await kit._web3Contracts.getElection()
+    //epochRewards = await kit._web3Contracts.getEpochRewards()
+    //accounts = await kit._web3Contracts.getAccounts()
   }
 
-  const waitForEpochTransition = async (epoch: number) => {
+  /*const waitForEpochTransition = async (epoch: number) => {
     let blockNumber: number
     do {
       blockNumber = await kit.web3.eth.getBlockNumber()
       await sleep(0.1)
     } while (blockNumber % epoch !== 1)
-  }
+  }*/
 
   const waitUntilBlock = async (bn: number) => {
     let blockNumber: number
@@ -106,7 +123,7 @@ describe('Slashing tests', function(this: any) {
     } while (blockNumber < bn)
   }
 
-  const getValidatorGroupMembers = async (blockNumber?: number) => {
+  /*const getValidatorGroupMembers = async (blockNumber?: number) => {
     if (blockNumber) {
       const [groupAddress] = await validators.methods
         .getRegisteredValidatorGroups()
@@ -120,9 +137,9 @@ describe('Slashing tests', function(this: any) {
       const groupInfo = await validators.methods.getValidatorGroup(groupAddress).call()
       return groupInfo[0]
     }
-  }
+  }*/
 
-  const getValidatorGroupPrivateKey = async () => {
+  /*const getValidatorGroupPrivateKey = async () => {
     console.info('start1')
     const [groupAddress] = await validators.methods.getRegisteredValidatorGroups().call()
     console.info('start2 ' + groupAddress)
@@ -138,14 +155,14 @@ describe('Slashing tests', function(this: any) {
     const decryptedKeystore = kit.web3.eth.accounts.decrypt(encryptedKeystore, encryptionKey)
     console.info('start5 ' + name)
     return decryptedKeystore.privateKey
-  }
+  }*/
 
   describe('when running a network', () => {
     before(async () => {
-      await restartGeth()
+      await restart()
     })
 
-    it('should have registered validators', async () => {
+    /*it('should have registered validators', async () => {
       console.info('helo-1')
       const groupPrivateKey = await getValidatorGroupPrivateKey()
       console.info('helo-2')
@@ -194,7 +211,7 @@ describe('Slashing tests', function(this: any) {
       const validatorsWrapper = await kit.contracts.getValidators()
       const validatorList = await validatorsWrapper.getRegisteredValidators()
       assert.equal(true, validatorList.length > 0)
-    })
+    })*/
 
     it('should parse blockNumber from test header', async () => {
       this.timeout(0)
@@ -233,7 +250,7 @@ describe('Slashing tests', function(this: any) {
       assert.equal(blockHash, block.hash)
     })
 
-    it('slashing for double signing', async () => {
+    /*it('slashing for double signing', async () => {
       const contract = await kit._web3Contracts.getElection()
       const current = await kit.web3.eth.getBlockNumber()
       const block = await kit.web3.eth.getBlock(current)
@@ -275,7 +292,7 @@ describe('Slashing tests', function(this: any) {
       //   blockA, // First double signed block.
       //   blockB, // Second double signed block.
       //   Block)  // number where double signing occured. Throws if no double signing is detected.
-    })
+    })*/
   })
 
   let doubleSigningBlock: any
