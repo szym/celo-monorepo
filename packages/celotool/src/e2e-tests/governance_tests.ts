@@ -5,7 +5,6 @@ import { getBlsPoP, getBlsPublicKey } from '@celo/utils/lib/bls'
 import { fromFixed, toFixed } from '@celo/utils/lib/fixidity'
 import BigNumber from 'bignumber.js'
 import { assert } from 'chai'
-import * as rlp from 'rlp'
 import Web3 from 'web3'
 import {
   assertAlmostEqual,
@@ -16,7 +15,6 @@ import {
   sleep,
   waitToFinishSyncing,
 } from './utils'
-import { NULL_ADDRESS } from '@celo/utils/lib/address'
 
 interface MemberSwapper {
   swap(): Promise<void>
@@ -127,20 +125,7 @@ describe('governance tests', () => {
     ],
   }
 
-  const gethConfigDown = {
-    migrate: true,
-    instances: [
-      // Validators 0 and 1 are swapped in and out of the group.
-      { name: 'validator0', validating: true, syncmode: 'full', port: 30303, rpcport: 8545 },
-      { name: 'validator1', validating: true, syncmode: 'full', port: 30305, rpcport: 8547 },
-      // Validator 2 will authorize a validating key every other epoch.
-      { name: 'validator2', validating: true, syncmode: 'full', port: 30307, rpcport: 8549 },
-      { name: 'validator3', validating: true, syncmode: 'full', port: 30309, rpcport: 8551 },
-    ],
-  }
-
   const context: any = getContext(gethConfig)
-  const contextDown: any = getContext(gethConfigDown)
   let web3: any
   let election: any
   let stableToken: any
@@ -162,22 +147,6 @@ describe('governance tests', () => {
 
   const restart = async () => {
     await context.hooks.restart()
-    web3 = new Web3('http://localhost:8545')
-    kit = newKitFromWeb3(web3)
-    console.log(await web3.eth.getAccounts())
-    goldToken = await kit._web3Contracts.getGoldToken()
-    stableToken = await kit._web3Contracts.getStableToken()
-    sortedOracles = await kit._web3Contracts.getSortedOracles()
-    validators = await kit._web3Contracts.getValidators()
-    registry = await kit._web3Contracts.getRegistry()
-    reserve = await kit._web3Contracts.getReserve()
-    election = await kit._web3Contracts.getElection()
-    epochRewards = await kit._web3Contracts.getEpochRewards()
-    accounts = await kit._web3Contracts.getAccounts()
-  }
-
-  const restartWithDowntime = async () => {
-    await contextDown.hooks.restart()
     web3 = new Web3('http://localhost:8545')
     kit = newKitFromWeb3(web3)
     console.log(await web3.eth.getAccounts())
@@ -268,14 +237,6 @@ describe('governance tests', () => {
     } while (blockNumber % epoch !== 1)
   }
 
-  const waitUntilBlock = async (bn: number) => {
-    let blockNumber: number
-    do {
-      blockNumber = await web3.eth.getBlockNumber()
-      await sleep(0.1)
-    } while (blockNumber < bn)
-  }
-
   const assertTargetVotingYieldChanged = async (blockNumber: number, expected: BigNumber) => {
     const currentTarget = new BigNumber(
       (await epochRewards.methods.getTargetVotingYieldParameters().call({}, blockNumber))[0]
@@ -325,258 +286,6 @@ describe('governance tests', () => {
     )
     assertAlmostEqual(currentSupply.minus(previousSupply), expected)
   }
-
-  let doubleSigningBlock: any
-
-  describe('test slashing for downtime', () => {
-    before(async function(this: any) {
-      this.timeout(0) // Disable test timeout
-      await restartWithDowntime()
-
-      try {
-        const elect = await kit._web3Contracts.getElection()
-
-        console.log('signers', await elect.methods.getCurrentValidatorSigners().call())
-      } catch (err) {
-        console.log(err)
-        await sleep(1000)
-      }
-    })
-
-    it('slash for downtime', async function(this: any) {
-      this.timeout(0) // Disable test timeout
-      try {
-        const slasher = await kit._web3Contracts.getDowntimeSlasher()
-        const elect = await kit._web3Contracts.getElection()
-
-        const blockNumber = await web3.eth.getBlockNumber()
-
-        console.info('at block', blockNumber)
-
-        await waitUntilBlock(blockNumber + 20)
-        console.info('at block', await web3.eth.getBlockNumber())
-        console.log('signers', await elect.methods.getCurrentValidatorSigners().call())
-
-        doubleSigningBlock = await web3.eth.getBlock(blockNumber + 15)
-
-        for (let i = blockNumber; i < blockNumber + 1; i++) {
-          console.log('block', i, await slasher.methods.getParentSealBitmap(i).call())
-        }
-
-        const signer = await slasher.methods
-          .validatorSignerAddressFromSet(4, blockNumber + 12)
-          .call()
-
-        const validator = (await kit.web3.eth.getAccounts())[0]
-        await kit.web3.eth.personal.unlockAccount(validator, '', 1000000)
-        console.log(validator)
-
-        const lockedGold = await kit.contracts.getLockedGold()
-        const accounts = await kit.contracts.getAccounts()
-
-        console.log('signer to account', await accounts.signerToAccount(signer))
-
-        console.log('incentives', await slasher.methods.slashingIncentives().call())
-
-        console.log('total', (await lockedGold.getAccountTotalLockedGold(signer)).toString(10))
-        console.log(
-          'nonvoting',
-          (await lockedGold.getAccountNonvotingLockedGold(signer)).toString(10)
-        )
-
-        console.log('locked balance', await web3.eth.getBalance(lockedGold.address))
-
-        const valid = await kit._web3Contracts.getValidators()
-
-        const history = await valid.methods.getHistory(signer).call()
-        const historyIndex = history[0].length - 1
-        console.log('history', history, historyIndex)
-
-        console.log('registry', await slasher.methods.getSlasher().call(), slasher.options.address)
-
-        console.log(
-          'check',
-          await slasher.methods.debugIsDown(signer, blockNumber + 12, 4, 4).call()
-        )
-
-        await slasher.methods
-          .slash(
-            signer,
-            blockNumber + 12,
-            4,
-            4,
-            historyIndex,
-            [],
-            [],
-            [],
-            [NULL_ADDRESS],
-            [NULL_ADDRESS],
-            [0]
-          )
-          .send({ from: validator, gas: 5000000 })
-
-        console.log('remaining', (await lockedGold.getAccountTotalLockedGold(signer)).toString(10))
-      } catch (err) {
-        console.log(err)
-        await sleep(1000)
-      }
-    })
-  })
-
-  describe('test slashing for double signing', () => {
-    before(async function(this: any) {
-      this.timeout(0) // Disable test timeout
-      await restart()
-
-      try {
-        const block = await web3.eth.getBlock(123)
-        // console.log('header', block)
-        const blockRlp = rlp.encode(headerArray(web3, block))
-
-        const downtimeSlasher = await kit._web3Contracts.getDowntimeSlasher()
-        const elect = await kit._web3Contracts.getElection()
-
-        console.log('signers', await elect.methods.getCurrentValidatorSigners().call())
-
-        const hash = await downtimeSlasher.methods.hashHeader(blockRlp).call()
-        console.info('hash', hash)
-
-        const signer = await downtimeSlasher.methods.validatorSignerAddressFromSet(2, 100).call()
-        console.info('signer', signer)
-
-        console.info('at block', await web3.eth.getBlockNumber())
-
-        const bitmap = await downtimeSlasher.methods
-          .getVerifiedSealBitmapFromHeader(blockRlp)
-          .call({ gas: 1000000 })
-        console.info('bitmap', bitmap)
-      } catch (err) {
-        console.log(err)
-        await sleep(1000)
-      }
-    })
-
-    it('slash for double signing', async function(this: any) {
-      this.timeout(0) // Disable test timeout
-      try {
-        const slasher = await kit._web3Contracts.getDoubleSigningSlasher()
-        const elect = await kit._web3Contracts.getElection()
-
-        await waitUntilBlock(doubleSigningBlock.number)
-        console.info('at block', await web3.eth.getBlockNumber())
-        console.log('signers', await elect.methods.getCurrentValidatorSigners().call())
-
-        const other = rlp.encode(headerArray(web3, doubleSigningBlock))
-
-        //console.log('at 245', (await web3.eth.getBlock(245)).raw)
-
-        const num = await slasher.methods.getBlockNumberFromHeader(other).call()
-        console.log('number', num)
-
-        const header = rlp.encode(headerArray(web3, await web3.eth.getBlock(num)))
-
-        const bitmap2 = await slasher.methods.getVerifiedSealBitmapFromHeader(other).call()
-        const bitmap = await slasher.methods.getVerifiedSealBitmapFromHeader(header).call()
-        const hash = await slasher.methods.hashHeader(header).call()
-        console.log(header, bitmap, hash)
-
-        let bmNum1 = new BigNumber(bitmap).toNumber()
-        let bmNum2 = new BigNumber(bitmap2).toNumber()
-        let signerIdx = 0
-        for (let i = 0; i < 5; i++) {
-          if ((bmNum1 & 1) === 1 && (bmNum2 & 1) === 1) break
-          signerIdx++
-          bmNum1 = bmNum1 >> 1
-          bmNum2 = bmNum2 >> 1
-        }
-        console.log('index', signerIdx)
-
-        const valid = await kit._web3Contracts.getValidators()
-
-        const signer = await slasher.methods.validatorSignerAddressFromSet(signerIdx, num).call()
-        const validator = (await kit.web3.eth.getAccounts())[0]
-        await kit.web3.eth.personal.unlockAccount(validator, '', 1000000)
-        console.log(validator)
-
-        const lockedGold = await kit.contracts.getLockedGold()
-        const accounts = await kit.contracts.getAccounts()
-
-        console.log('signer to account', await accounts.signerToAccount(signer))
-
-        console.log('incentives', await slasher.methods.slashingIncentives().call())
-
-        console.log('total', (await lockedGold.getAccountTotalLockedGold(signer)).toString(10))
-        console.log(
-          'nonvoting',
-          (await lockedGold.getAccountNonvotingLockedGold(signer)).toString(10)
-        )
-
-        console.log(
-          'BN',
-          await slasher.methods.checkForDoubleSigning(signer, signerIdx, header, other).call()
-        )
-
-        console.log('locked balance', await web3.eth.getBalance(lockedGold.address))
-
-        const blockNumber = await web3.eth.getBlockNumber()
-        const history = await valid.methods.getHistory(signer).call()
-        const historyIndex = history[0].length - 1
-        console.log('history', history, historyIndex)
-
-        console.log(await valid.methods.debugCheck().call())
-        console.log('registry', await slasher.methods.getSlasher().call(), slasher.options.address)
-
-        try {
-          console.log('epoch at', num, await slasher.methods.getEpochNumberOfBlock(num).call())
-          console.log('epoch now', await slasher.methods.getEpochNumberOfBlock(blockNumber).call())
-
-          console.log(
-            'group 22',
-            await valid.methods.groupMembershipInEpoch(signer, 22, historyIndex).call()
-          )
-          console.log(
-            'group 23',
-            await valid.methods.groupMembershipInEpoch(signer, 23, historyIndex).call()
-          )
-          console.log(
-            'group 24',
-            await valid.methods.groupMembershipInEpoch(signer, 24, historyIndex).call()
-          )
-          console.log(
-            'group',
-            await slasher.methods.groupMembershipAtBlock(signer, num, historyIndex).call()
-          )
-          console.log(
-            'group now',
-            await slasher.methods.groupMembershipAtBlock(signer, blockNumber, historyIndex).call()
-          )
-        } catch (err) {
-          console.log(err)
-        }
-
-        await slasher.methods
-          .slash(
-            signer,
-            signerIdx,
-            header,
-            other,
-            historyIndex,
-            [],
-            [],
-            [],
-            [NULL_ADDRESS],
-            [NULL_ADDRESS],
-            [0]
-          )
-          .send({ from: validator, gas: 5000000 })
-
-        console.log('remaining', (await lockedGold.getAccountTotalLockedGold(signer)).toString(10))
-      } catch (err) {
-        console.log(err)
-        await sleep(1000)
-      }
-    })
-  })
 
   describe('when the validator set is changing', () => {
     let epoch: number
@@ -1102,23 +811,3 @@ describe('governance tests', () => {
     })
   })
 })
-
-function headerArray(web3: Web3, block: any) {
-  return [
-    block.parentHash,
-    block.sha3Uncles,
-    block.miner,
-    block.stateRoot,
-    block.transactionsRoot,
-    block.receiptsRoot,
-    block.logsBloom,
-    web3.utils.toHex(block.difficulty),
-    block.number,
-    block.gasLimit,
-    block.gasUsed,
-    block.timestamp,
-    block.extraData,
-    block.mixHash,
-    block.nonce,
-  ]
-}
